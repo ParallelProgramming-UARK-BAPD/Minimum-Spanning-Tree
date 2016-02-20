@@ -285,7 +285,19 @@ void MSTSort(int* list, int rank, int size, int localnvert) {
     }
 
     //print the final MST
-    if (PRINTING && rank == 0) printMST(MST);
+    if (PRINTING && rank == 0)
+	{
+		printMST(MST);
+	}
+    else if(!PRINTING && rank == 0)
+    {
+    	ofstream outfile;
+    	outfile.open("mst.txt");
+    	  for (int ab = 0; ab < MST.size(); ab++)
+    	    outfile << "MST Edge from v" << MST[ab].v1 << " to v" << MST[ab].v2
+    	          << ", weight "<<MST[ab].weight << "\n";
+    }
+
 
 }//end MSTSort
 
@@ -348,6 +360,11 @@ int main(int argc, char** argv) {
     }//end if rank 0
 
     MSTSort(elist, rank, size, localnvert);
+
+    if(rank == 0)
+    {
+
+    }
 
     MPI_Finalize();
     return 0;
