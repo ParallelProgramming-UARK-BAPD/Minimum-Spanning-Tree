@@ -46,7 +46,7 @@ using namespace std;
 #define MIGN MPI_STATUS_IGNORE
 
 MPI_Datatype mpi_edge;
-int V;
+#define V 64
 #define MD 1000
 #define inputFile "graph64_640.txt"
 //where V is number vertices and MD is max degree of any vertex
@@ -302,6 +302,7 @@ void MSTSort(int* list, int rank, int size, int localV) {
 
 int main(int argc, char** argv) {
 
+    int numVert;
     int nedge;
     int *elist;
     int v1, v2, weight;
@@ -323,7 +324,7 @@ int main(int argc, char** argv) {
         ifstream graphfile(inputFile);
         string line;
         if (graphfile.is_open()) {
-            graphfile >> V;
+            graphfile >> numVert;
             graphfile >> nedge;
 
             elist = new int[V * (MD * 2)];
@@ -358,7 +359,7 @@ int main(int argc, char** argv) {
     }//end if rank 0
 
     //broadcast the number of vertices
-    MPI_Bcast(&V, 1, MPI_INT, 0, MPI_COMM_WORLD);
+  //  MPI_Bcast(&V, 1, MPI_INT, 0, MPI_COMM_WORLD);
     //vertices per process
     int localNumVert = V / size;
 
