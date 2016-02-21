@@ -37,8 +37,8 @@
 using namespace std;
 
 //flags for quick debugging
-#define PRINTING true
-#define MPI true
+#define PRINTING false
+#define DETAILED false
 
 //flags for quick shortcuts
 #define MINT MPI_INTEGER
@@ -46,9 +46,9 @@ using namespace std;
 #define MIGN MPI_STATUS_IGNORE
 
 MPI_Datatype mpi_edge;
-#define V 64
+#define V 6400
 #define MD 1000
-#define inputFile "graph64_640.txt"
+#define inputFile "graph.txt"
 //where V is number vertices and MD is max degree of any vertex
 
 struct edge {
@@ -147,8 +147,9 @@ bool dist_change(int size, int headNodeArray[], edge localEdge, vector<edge>& MS
             tempEdge.weight = recbuff[2];
             edgepq.push(tempEdge);
             validEdges++;
+            if (PRINTING) cout << "P0 received v"<<tempEdge.v1<<" v"<<tempEdge.v2<<" w"<<tempEdge.weight<<" from p"<<x<<" Qsize "<<edgepq.size()<<endl;
         }
-        if (PRINTING) cout << "P0 received v"<<tempEdge.v1<<" v"<<tempEdge.v2<<" w"<<tempEdge.weight<<" from p"<<x<<" Qsize "<<edgepq.size()<<endl;
+
 
     }
 
@@ -163,8 +164,8 @@ bool dist_change(int size, int headNodeArray[], edge localEdge, vector<edge>& MS
         //if not already in the same set
         if (check_edge(tempEdge, headNodeArray, true)){
               MST.push_back(tempEdge);  //add the edge to the MST!
-              if (PRINTING) cout << "combined v"<<tempEdge.v1<<" v"<<tempEdge.v2<<", "<<headNodeArray[tempEdge.v1]<<"="<<headNodeArray[tempEdge.v2]<<endl;
-              if (PRINTING) cout << "MST SIZE : " << MST.size()<<endl;
+              if (PRINTING && DETAILED) cout << "combined v"<<tempEdge.v1<<" v"<<tempEdge.v2<<", "<<headNodeArray[tempEdge.v1]<<"="<<headNodeArray[tempEdge.v2]<<endl;
+              if (PRINTING && DETAILED) cout << "MST SIZE : " << MST.size()<<endl;
         }
         edgepq.pop();
     }
@@ -204,7 +205,7 @@ void MSTSort(int* list, int rank, int size, int localV) {
     //MPI_Barrier(MPI_COMM_WORLD);
 
     //PRINT LOCAL list (only non zero edges for each process)
-    if( PRINTING ){
+    if( PRINTING && DETAILED){
       cout << "\nPROCESS " << rank <<
             ":: localArraySize::" << localArraySize <<
             ":: localV::" << localV;
@@ -283,10 +284,9 @@ void MSTSort(int* list, int rank, int size, int localV) {
 
     //print the final MST
     if (PRINTING && rank == 0)
-	{
-		printMST(MST);
-    printHNA(headNodeArray);
-	}
+	  {
+		    printMST(MST);
+	  }
     else if(!PRINTING && rank == 0)
     {
     	ofstream outfile;
@@ -358,8 +358,6 @@ int main(int argc, char** argv) {
         }//end if open
     }//end if rank 0
 
-    //broadcast the number of vertices
-  //  MPI_Bcast(&V, 1, MPI_INT, 0, MPI_COMM_WORLD);
     //vertices per process
     int localNumVert = V / size;
 
