@@ -36,11 +36,6 @@
 
 using namespace std;
 
-#define V 32
-#define MD 64
-
-//where V is number vertices and MD is max degree of any vertex
-
 //flags for quick debugging
 #define PRINTING true
 #define MPI true
@@ -51,6 +46,10 @@ using namespace std;
 #define MIGN MPI_STATUS_IGNORE
 
 MPI_Datatype mpi_edge;
+int V;
+#define MD 1000
+#define inputFile "graph64_640.txt"
+//where V is number vertices and MD is max degree of any vertex
 
 struct edge {
     int v1, v2;
@@ -67,10 +66,20 @@ class compareEdgeWeights
 		}
 };
 
+//print HEad node array
+void printHNA(int headNodeArray[]){
+  cout << "HNA: ";
+  for(int x = 0; x < V; x++){
+    cout << x<<"="<<headNodeArray[x] << " ,";
+  }
+  cout << endl;
+}
+
 typedef priority_queue<edge, vector<edge>, compareEdgeWeights> edgepq;
 
-//true if usable
-bool check_edge(edge e, int headNodeArray[]) {
+//true if usable, combine flag true if we should go ahead and combine them
+//on the head node array
+bool check_edge(edge e, int headNodeArray[], bool combineFlag) {
     int v1Head = e.v1;
     int v2Head = e.v2;
     int index;
@@ -89,19 +98,10 @@ bool check_edge(edge e, int headNodeArray[]) {
 
     if(v1Head == v2Head){
         return false; //same head so unusable
-    }else {
+    }else if (combineFlag) {
         headNodeArray[v2Head] = v1Head;
-        return true; //not same set (but it is now)
     }
-}
-
-//print HEad node array
-void printHNA(int headNodeArray[]){
-  cout << "HNA: ";
-  for(int x = 0; x < V; x++){
-    cout << x<<"="<<headNodeArray[x] << " ,";
-  }
-  cout << endl;
+    return true; //not same set (but it is now)
 }
 
 //print final MST
@@ -109,6 +109,7 @@ void printMST(vector<edge>& MST){
   for (int x = 0; x < MST.size(); x++)
     cout << "MST Edge from v" << MST[x].v1 << " to v" << MST[x].v2
           << ", weight "<<MST[x].weight << endl;
+  cout << "MST Size: " << MST.size() << endl;
 }
 
 /*send an edge to process 0*/
@@ -129,7 +130,10 @@ bool dist_change(int size, int headNodeArray[], edge localEdge, vector<edge>& MS
 
     //p0 gets each edge
     if(localEdge.v1 != localEdge.v2) {
-        edgepq.push(localEdge);
+        tempEdge.v1 = localEdge.v1;
+        tempEdge.v2 = localEdge.v2;
+        tempEdge.weight = localEdge.weight;
+        edgepq.push(tempEdge);
         validEdges++;
     }
     for (int x = 1; x < size; x++) {
@@ -144,31 +148,30 @@ bool dist_change(int size, int headNodeArray[], edge localEdge, vector<edge>& MS
             edgepq.push(tempEdge);
             validEdges++;
         }
-        //if (PRINTING) cout << "P0 received v"<<tempEdge.v1<<" v"<<tempEdge.v2<<" w"<<tempEdge.weight<<" from p"<<x<<" Qsize "<<edgepq.size()<<endl;
+        if (PRINTING) cout << "P0 received v"<<tempEdge.v1<<" v"<<tempEdge.v2<<" w"<<tempEdge.weight<<" from p"<<x<<" Qsize "<<edgepq.size()<<endl;
 
+    }
+
+    //if all edges were fake
+    if (validEdges == 0){
+      return false;
     }
 
     //p0 grabs least weight edge, checks sets and updates headNodeArray
     while( !edgepq.empty()){
         tempEdge = edgepq.top();
         //if not already in the same set
-        if (check_edge(tempEdge, headNodeArray)){
+        if (check_edge(tempEdge, headNodeArray, true)){
               MST.push_back(tempEdge);  //add the edge to the MST!
-              //cout << "combined v"<<tempEdge.v1<<" v"<<tempEdge.v2<<", "<<headNodeArray[tempEdge.v1]<<"="<<headNodeArray[tempEdge.v2]<<endl;
+              if (PRINTING) cout << "combined v"<<tempEdge.v1<<" v"<<tempEdge.v2<<", "<<headNodeArray[tempEdge.v1]<<"="<<headNodeArray[tempEdge.v2]<<endl;
+              if (PRINTING) cout << "MST SIZE : " << MST.size()<<endl;
         }
         edgepq.pop();
     }
-
-    //return valid edges found or not
-    if (validEdges > 0){
-      return true;
-    } else{
-      return false;
-    }
-
+    return true;
 }//end dist_change
 
-void MSTSort(int* list, int rank, int size, int localnvert) {
+void MSTSort(int* list, int rank, int size, int localV) {
 
     //head node array for each process
     int headNodeArray[V+1]; //the last element of head node array tells the processes to continue or are they all done (0 == done)
@@ -189,7 +192,7 @@ void MSTSort(int* list, int rank, int size, int localnvert) {
     }//end if rank 0
 
     //local matrix for each proc's vertices it gets
-    int localArraySize = localnvert * (MD * 2);
+    int localArraySize = localV * (MD * 2);
     int localList[localArraySize];
 
     //scatter the data into the local array(s)
@@ -200,19 +203,19 @@ void MSTSort(int* list, int rank, int size, int localnvert) {
 
     //MPI_Barrier(MPI_COMM_WORLD);
 
-/*    //PRINT LOCAL list (only non zero edges for each process)
+    //PRINT LOCAL list (only non zero edges for each process)
     if( PRINTING ){
-    cout << "\nPROCESS " << rank <<
+      cout << "\nPROCESS " << rank <<
             ":: localArraySize::" << localArraySize <<
-            ":: localnvert::" << localnvert;
-    for (int x = 0; x < localArraySize; x+=2) {
-        if (x % (MD*2) == 0 ) cout << "\n\n";
+            ":: localV::" << localV;
+      for (int x = 0; x < localArraySize; x+=2) {
+        if (x % (MD*2) == 0 ) cout << "\n";
         if (localList[x+1] != 0){
-            cout << localnvert * rank + (x / (MD*2))
+            cout << localV * rank + (x / (MD*2))
                  << "->" << localList[x] << ":" << localList[x+1] << "   "; }
-    } cout << "\n\n";
-  }//end print
-*/
+        } cout << "\n\n";
+    }//end print     */
+
     //priority q for each process' edges
     priority_queue<edge, vector<edge>, compareEdgeWeights> edgepq;
 
@@ -224,7 +227,7 @@ void MSTSort(int* list, int rank, int size, int localnvert) {
         while (localList[x+1] != 0){
 
           edge temp;
-          temp.v1 = (localnvert * rank + (x / (MD*2))); //vertex 1
+          temp.v1 = (localV * rank + (x / (MD*2))); //vertex 1
           temp.v2 = localList[x];
           temp.weight = localList[x+1];
           temp.use = 2;
@@ -234,7 +237,6 @@ void MSTSort(int* list, int rank, int size, int localnvert) {
           localEdgeCount++;
         }
     }
-    //if (PRINTING) cout << localEdgeCount << " localEdgeCount " << " edgepqsize = "<< edgepq.size()<<endl;
 
     //while processor has more edges
     //while(! edgepq.empty() ){
@@ -247,10 +249,9 @@ void MSTSort(int* list, int rank, int size, int localnvert) {
       }else{
         //find least weight, usable edge
         least = edgepq.top();
-        while( !check_edge(least, headNodeArray) && !edgepq.empty()){
+        while( !check_edge(least, headNodeArray, false) && !edgepq.empty()){
             edgepq.pop();
             if( edgepq.empty() ) {
-              //cout << "PROCESS DONE = " << rank<<endl;
               least = fakeEdge;
             }else {
               least = edgepq.top();
@@ -264,14 +265,11 @@ void MSTSort(int* list, int rank, int size, int localnvert) {
         if(rank != 0){
             //SEND EDGE
             pass_change(least);
-            //cout << "\nleft pass_change:"<<rank<<endl;
-
         } else if(rank == 0){
             //receive edges, and passes it's own leasst weight edge as well
             if( !dist_change(size, headNodeArray, least, MST)){
                 headNodeArray[V] = 0; //all done flag
             }
-            //cout << "\nleft distchange"<<endl;
         }
 
         //remove edge
@@ -281,13 +279,13 @@ void MSTSort(int* list, int rank, int size, int localnvert) {
 
         //update new Head node array to procs
         MPI_Bcast(headNodeArray, V+1, MPI_INT, 0, MPI_COMM_WORLD);
-        //if (PRINTING) {cout << rank; printHNA(headNodeArray);}
     }
 
     //print the final MST
     if (PRINTING && rank == 0)
 	{
 		printMST(MST);
+    printHNA(headNodeArray);
 	}
     else if(!PRINTING && rank == 0)
     {
@@ -296,13 +294,14 @@ void MSTSort(int* list, int rank, int size, int localnvert) {
     	  for (int ab = 0; ab < MST.size(); ab++)
     	    outfile << "MST Edge from v" << MST[ab].v1 << " to v" << MST[ab].v2
     	          << ", weight "<<MST[ab].weight << "\n";
+        outfile << "MST size =" << MST.size();
     }
 
 
 }//end MSTSort
 
 int main(int argc, char** argv) {
-    int nvert;
+
     int nedge;
     int *elist;
     int v1, v2, weight;
@@ -315,22 +314,19 @@ int main(int argc, char** argv) {
     MPI_Type_commit(&mpi_edge);
 
     double starttime, endtime;
-    starttime = MPI_Wtime();
 
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-    int localnvert = V / size;
-
     if (rank == 0) {
 
-        ifstream graphfile("graph.txt");
+        ifstream graphfile(inputFile);
         string line;
         if (graphfile.is_open()) {
-            graphfile >> nvert;
+            graphfile >> V;
             graphfile >> nedge;
 
-            elist = new int[nvert * (MD * 2)];
+            elist = new int[V * (MD * 2)];
 
             int x = 0;
             for (int i = 0; i < nedge; i++) {
@@ -355,15 +351,23 @@ int main(int argc, char** argv) {
 
                 x++;
             }//end for
+            if (PRINTING) cout << "File loaded " << inputFile << endl;
             graphfile.close();
+            starttime = MPI_Wtime();
         }//end if open
     }//end if rank 0
 
-    MSTSort(elist, rank, size, localnvert);
+    //broadcast the number of vertices
+    MPI_Bcast(&V, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    //vertices per process
+    int localNumVert = V / size;
 
-    if(rank == 0)
-    {
+    MSTSort(elist, rank, size, localNumVert);
 
+    //finish timing
+    if (rank == 0){
+        endtime = MPI_Wtime();
+        cout << endtime - starttime << "s timing." << endl;
     }
 
     MPI_Finalize();
