@@ -364,6 +364,7 @@ int main(int argc, char** argv) {
 
     if(rank != 0)
     {
+    	buffer = new int[2];
     	numVert = buffer[0];
     	nedge = buffer[1];
     }
