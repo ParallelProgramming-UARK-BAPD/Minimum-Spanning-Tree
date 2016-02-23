@@ -358,13 +358,15 @@ int main(int argc, char** argv) {
             starttime = MPI_Wtime();
         }//end if open
         *buffer = {numVert, nedge};
+        MPI_Bcast(buffer, 2, MINT, 0, MCOMM);
     }//end if rank 0
 
-    MPI_Bcast(buffer, 2, MINT, 0, MCOMM);
+
 
     if(rank != 0)
     {
     	buffer = new int[2];
+    	MPI_Bcast(buffer, 2, MINT, 0, MCOMM);
     	numVert = buffer[0];
     	nedge = buffer[1];
     }
